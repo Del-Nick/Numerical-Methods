@@ -1,18 +1,12 @@
 import multiprocessing
-import time
 
-import numpy as np
-from numpy import exp, pi, abs, max, sin
-from numpy import conj, arange, linspace, ndarray, zeros, zeros_like, meshgrid, concatenate
-
-import matplotlib.pyplot as plt
-from matplotlib.colors import Normalize
 import matplotlib.cm as cm
-from matplotlib.widgets import Button, Slider
-import scipy
+import matplotlib.pyplot as plt
 import pyfftw
-import timeit
+from matplotlib.colors import Normalize
 from numba import njit
+from numpy import arange, linspace, ndarray, zeros, meshgrid, concatenate
+from numpy import exp, pi, abs, max
 from tqdm import tqdm
 
 """
@@ -40,7 +34,7 @@ x_min, x_max = -5, 5
 y_min, y_max = -5, 5
 z_min, z_max = 0, 0.4
 
-Rv = -11
+Rv = 0
 
 ax_x = linspace(x_min, x_max, 1024, dtype='float64')
 ax_y = linspace(y_min, y_max, 1024, dtype='float64')
@@ -198,7 +192,7 @@ def get_2D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
         if folder:
             fig.savefig(f'{folder}/2D Wind refraction at z with Rv = {Rv}.png', bbox_inches='tight', dpi=720)
         else:
-            fig.savefig(f'2D Wind refraction at z with Rv = {Rv}.png', bbox_inches='tight',  dpi=720)
+            fig.savefig(f'2D Wind refraction at z with Rv = {Rv}.png', bbox_inches='tight', dpi=720)
 
     if show:
         plt.show()
@@ -224,6 +218,34 @@ def get_2D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
         plt.show()
 
 
+def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = None):
+    """
+    Строит график максимальной интенсивности для каждой плоскости XY от Z
+    :param E: поле, трёхмерный массив NumPy
+    :param show: вкл/выкл отображения графиков
+    :param save: вкл/выкл сохранения графиков
+    :param folder: папка для сохранения графиков
+    """
+    E = abs(E) ** 2
+
+    plt.figure(num='Максимальная интенсивность от z', figsize=(8, 8))
+    plt.plot(ax_z, [max(E[i, :, ax_y.size // 2]) for i in range(ax_z.size)])
+    plt.grid()
+    plt.title('Зависимость максимальной интенсивности от z')
+
+    plt.xlabel('X, м')
+    plt.ylabel('Max intensity')
+
+    if save:
+        if folder:
+            plt.savefig(f'{folder}/Max intensity with Rv = {Rv}.png', dpi=720)
+        else:
+            plt.savefig(f'Max intensity with Rv = {Rv}.png', dpi=720)
+
+    if show:
+        plt.show()
+
+
 x_2D, y_2D = meshgrid(ax_x, ax_y)
 E = zeros(shape=(ax_z.size, ax_x.size, ax_y.size), dtype='complex128')
 
@@ -234,5 +256,6 @@ for i, z in enumerate(tqdm(ax_z[1:], desc='Расчёт ветровой реф�
     E[i] = ifft(get_linear_part_of_field(spectra=fft(E[i - 1])))
     E[i] = get_nonlinear_part_of_field(field=E[i])
 
-# get_3D_graph(E, show=False, save=True)
+get_3D_graph(E, show=False, save=True)
 get_2D_graph(E, show=False, save=True)
+get_plot(E, show=False, save=True)
