@@ -89,8 +89,9 @@ def get_linear_part_of_field(spectra: ndarray) -> ndarray:
 
 
 @njit()
-def get_nonlinear_part_of_field(field: ndarray) -> ndarray:
-    return field * exp(-.5j * Rv * abs(field) ** 2 * dz)
+def get_nonlinear_part_of_field(field: ndarray, T: ndarray) -> tuple[ndarray, ndarray]:
+    T += abs(field) ** 2 * dx
+    return field * exp(-.5j * Rv * T * dz), T
 
 
 def get_3D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str = None):
@@ -248,14 +249,15 @@ def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = No
 
 x_2D, y_2D = meshgrid(ax_x, ax_y)
 E = zeros(shape=(ax_z.size, ax_x.size, ax_y.size), dtype='complex128')
+T = zeros(shape=(ax_x.size, ax_y.size), dtype='complex128')
 
 # Начальноре условие
 E[0] = exp(-(x_2D ** 2 + y_2D ** 2) / 2)
 
 for i, z in enumerate(tqdm(ax_z[1:], desc='Расчёт ветровой рефракции пучка'), start=1):
     E[i] = ifft(get_linear_part_of_field(spectra=fft(E[i - 1])))
-    E[i] = get_nonlinear_part_of_field(field=E[i])
+    E[i], T = get_nonlinear_part_of_field(field=E[i], T=T)
 
-get_3D_graph(E, show=False, save=True)
-get_2D_graph(E, show=False, save=True)
+get_3D_graph(E, show=True, save=False)
+get_2D_graph(E, show=True, save=False)
 get_plot(E, show=False, save=True)
