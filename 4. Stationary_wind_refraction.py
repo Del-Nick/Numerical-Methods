@@ -2,13 +2,11 @@ import multiprocessing
 
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
-import numpy as np
 import pyfftw
 from matplotlib.colors import Normalize
 from numba import njit
 from numpy import arange, linspace, ndarray, zeros, meshgrid, concatenate
 from numpy import exp, pi, abs, max
-from numpy.fft import fftshift
 from tqdm import tqdm
 
 """
@@ -36,9 +34,7 @@ x_min, x_max = -5, 5
 y_min, y_max = -5, 5
 z_min, z_max = 0, 0.4
 
-Rv = -11
-
-Nx, Ny = 1024, 1024
+Rv = 0
 
 ax_x = linspace(x_min, x_max, 1024, dtype='float64')
 ax_y = linspace(y_min, y_max, 1024, dtype='float64')
@@ -69,6 +65,33 @@ def ifft(a: ndarray) -> ndarray:
     get_ifft2_array = pyfftw.builders.ifft2(a, overwrite_input=True, planner_effort='FFTW_ESTIMATE',
                                             threads=multiprocessing.cpu_count(), norm='forward')
     return get_ifft2_array(a)
+
+
+def get_grid_for_the_run_through_method() -> tuple[ndarray, ndarray]:
+    i = arange(ax_x.size // 2)
+    i = concatenate([i, i[::-1]])
+    j = arange(ax_y.size // 2)
+    j = concatenate([j, j[::-1]])
+    i, j = meshgrid(i, j)
+    return i, j
+
+
+"""
+Для ускорения расчётов создаём двумерные сетки для x, y
+"""
+i_ax, j_ax = get_grid_for_the_run_through_method()
+
+
+@njit()
+def get_linear_part_of_field(spectra: ndarray) -> ndarray:
+    length = x_max - x_min
+    return spectra * exp(.5j * (2 * pi / length) ** 2 * (i_ax ** 2 + j_ax ** 2) * dz)
+
+
+@njit()
+def get_nonlinear_part_of_field(field: ndarray, T: ndarray) -> tuple[ndarray, ndarray]:
+    T += abs(field) ** 2 * dx
+    return field * exp(-.5j * Rv * T * dz), T
 
 
 def get_3D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str = None):
@@ -182,10 +205,9 @@ def get_2D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
     plt.title(f'y = {ax_y[ax_y.size // 2]:.0f} м')
     plt.colorbar(ticks=linspace(0, max(abs(E) ** 2), 5))
 
-    plt.xlabel('Z, м')
-    plt.ylabel('X, м')
-
     plt.tight_layout(pad=0.1)
+    plt.xlabel('X, м')
+    plt.ylabel('Y, м')
 
     if save:
         if folder:
@@ -215,8 +237,6 @@ def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = No
     plt.xlabel('X, м')
     plt.ylabel('Max intensity')
 
-    plt.tight_layout(pad=0.01)
-
     if save:
         if folder:
             plt.savefig(f'{folder}/Max intensity with Rv = {Rv}.png', dpi=720)
@@ -227,50 +247,17 @@ def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = No
         plt.show()
 
 
-def get_grid_for_the_run_through_method() -> tuple[ndarray, ndarray]:
-    i = arange(ax_x.size // 2)
-    i = concatenate([i, i[::-1]])
-    j = arange(ax_y.size // 2)
-    j = concatenate([j, j[::-1]])
-    i, j = meshgrid(i, j)
-    return i, j
-
-
-"""
-Для ускорения расчётов создаём двумерные сетки для x, y
-"""
-i_ax, j_ax = get_grid_for_the_run_through_method()
-
-
-@njit()
-def get_linear_part_of_field(spectra: ndarray) -> ndarray:
-    length = x_max - x_min
-    return spectra * exp(.5j * (2 * pi / length) ** 2 * (i_ax ** 2 + j_ax ** 2) * dz)
-
-
-@njit()
-def get_nonlinear_part_of_field(field: ndarray) -> tuple[ndarray, ndarray]:
-    T = zeros((Ny, Nx), dtype='complex128')
-    I = abs(field) ** 2
-    for x in np.arange(Nx - 1):
-        T[:, x + 1] = T[:, x] + dx * I[:, x]
-    return field * exp(-.5j * Rv * T * dz), T
-
-
 x_2D, y_2D = meshgrid(ax_x, ax_y)
 E = zeros(shape=(ax_z.size, ax_x.size, ax_y.size), dtype='complex128')
+T = zeros(shape=(ax_x.size, ax_y.size), dtype='complex128')
 
 # Начальноре условие
 E[0] = exp(-(x_2D ** 2 + y_2D ** 2) / 2)
 
 for i, z in enumerate(tqdm(ax_z[1:], desc='Расчёт ветровой рефракции пучка'), start=1):
     E[i] = ifft(get_linear_part_of_field(spectra=fft(E[i - 1])))
-    E[i], T = get_nonlinear_part_of_field(field=E[i])
+    E[i], T = get_nonlinear_part_of_field(field=E[i], T=T)
 
-
-show = False
-save = True
-
-get_3D_graph(E, show=show, save=save)
-get_2D_graph(E, show=show, save=save)
-get_plot(E, show=show, save=save)
+get_3D_graph(E, show=True, save=False)
+get_2D_graph(E, show=True, save=False)
+get_plot(E, show=False, save=True)
