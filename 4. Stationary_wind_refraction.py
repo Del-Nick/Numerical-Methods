@@ -7,8 +7,8 @@ import pyfftw
 from matplotlib.colors import Normalize
 from numba import njit
 from numpy import arange, linspace, ndarray, zeros, meshgrid, concatenate
-from numpy import exp, pi, abs, max
-from numpy.fft import fftshift
+from numpy import exp, pi, abs, max, sqrt
+from numpy.fft import fftshift, ifftshift
 from tqdm import tqdm
 
 """
@@ -32,11 +32,11 @@ print(f'В процессоре {multiprocessing.cpu_count()} ядер')
 ██      ██ ██   ██ ██ ██   ████     ██      ██   ██ ██   ██ ██   ██ ██      ██ ███████    ██    ███████ ██   ██ ███████                                                                                                               
 """
 
-x_min, x_max = -5, 5
-y_min, y_max = -5, 5
+x_min, x_max = -4, 4
+y_min, y_max = -4, 4
 z_min, z_max = 0, 0.4
 
-Rv = -11
+Rv = -0
 
 Nx, Ny = 1024, 1024
 
@@ -199,24 +199,32 @@ def get_2D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
         plt.show()
 
 
-def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = None):
+def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = None, theory: bool = False):
     """
     Строит график максимальной интенсивности для каждой плоскости XY от Z
+    :param theory: вкл/выкл добавление теоретической кривой на график
     :param E: поле, трёхмерный массив NumPy
     :param show: вкл/выкл отображения графиков
     :param save: вкл/выкл сохранения графиков
     :param folder: папка для сохранения графиков
     """
+
     E = abs(E) ** 2
 
+    if theory:
+        I_theory = 1 / (1 + ax_z ** 2)
+
     plt.figure(num='Максимальная интенсивность от z', figsize=(8, 8))
-    plt.plot(ax_z, [max(E[i, :, ax_y.size // 2]) for i in range(ax_z.size)])
+    plt.plot(ax_z, E[:, ax_x.size // 2, ax_y.size // 2], label='Решение уравнение')
+    if theory:
+        plt.plot(ax_z, I_theory, linestyle='--', label='Теоретическая кривая')
     plt.grid()
     plt.title('Зависимость максимальной интенсивности от z')
 
-    plt.xlabel('X, м')
+    plt.xlabel('Z, м')
     plt.ylabel('Max intensity')
 
+    plt.legend()
     plt.tight_layout(pad=0.01)
 
     if save:
@@ -230,10 +238,8 @@ def get_plot(E: ndarray, show: bool = True, save: bool = False, folder: str = No
 
 
 def get_grid_for_the_run_through_method() -> tuple[ndarray, ndarray]:
-    i = arange(ax_x.size // 2)
-    i = concatenate([i, i[::-1]])
-    j = arange(ax_y.size // 2)
-    j = concatenate([j, j[::-1]])
+    i = np.linspace(-Nx / 2, Nx / 2 - 1, Nx)
+    j = np.linspace(-Ny / 2, Ny / 2 - 1, Ny)
     i, j = meshgrid(i, j)
     return i, j
 
@@ -241,13 +247,13 @@ def get_grid_for_the_run_through_method() -> tuple[ndarray, ndarray]:
 """
 Для ускорения расчётов создаём двумерные сетки для x, y
 """
-i_ax, j_ax = get_grid_for_the_run_through_method()
+I, J = get_grid_for_the_run_through_method()
 
 
 @njit()
 def get_linear_part_of_field(spectra: ndarray) -> ndarray:
     length = x_max - x_min
-    return spectra * exp(.5j * (2 * pi / length) ** 2 * (i_ax ** 2 + j_ax ** 2) * dz)
+    return spectra * exp(.5j * (2 * pi / length) ** 2 * (I ** 2 + J ** 2) * dz)
 
 
 @njit()
@@ -256,7 +262,7 @@ def get_nonlinear_part_of_field(field: ndarray) -> tuple[ndarray, ndarray]:
     I = abs(field) ** 2
     for x in np.arange(Nx - 1):
         T[:, x + 1] = T[:, x] + dx * I[:, x]
-    return field * exp(-.5j * Rv * T * dz), T
+    return field * exp(-.5j * Rv * T * dz)
 
 
 x_2D, y_2D = meshgrid(ax_x, ax_y)
@@ -266,8 +272,8 @@ E = zeros(shape=(ax_z.size, ax_x.size, ax_y.size), dtype='complex128')
 E[0] = exp(-(x_2D ** 2 + y_2D ** 2) / 2)
 
 for i, z in enumerate(tqdm(ax_z[1:], desc='Расчёт ветровой рефракции пучка'), start=1):
-    E[i] = ifft(get_linear_part_of_field(spectra=fft(E[i - 1])))
-    E[i], T = get_nonlinear_part_of_field(field=E[i])
+    E[i] = ifft(ifftshift(get_linear_part_of_field(spectra=fftshift(fft(E[i - 1]), axes=(0, 1))), axes=(0, 1)))
+    E[i] = get_nonlinear_part_of_field(field=E[i])
 
 
 show = False
@@ -275,4 +281,4 @@ save = True
 
 get_3D_graph(E, show=show, save=save)
 get_2D_graph(E, show=show, save=save)
-get_plot(E, show=show, save=save)
+get_plot(E, show=show, save=save, theory=True)
