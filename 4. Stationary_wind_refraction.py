@@ -83,8 +83,8 @@ def get_3D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
 
     for z_index in [0, ax_z.size - 1]:
         fig, ax = plt.subplots(num='Ветровая рефракция пучка', figsize=(8, 8), subplot_kw={"projection": "3d"})
-        ax.set_title(f'z = {ax_z[z_index] * 100:.0f} см')
-        ax.plot_surface(X, Y, abs(E[z_index]) ** 2, cmap='viridis')
+        # ax.set_title(f'z = {ax_z[z_index] * 100:.0f} см')
+        ax.plot_surface(X, Y, abs(E[z_index]) ** 2, cmap='inferno', linewidth=0)
 
         ax.set_xlabel('X, м')
         ax.set_ylabel('Y, м')
@@ -93,10 +93,12 @@ def get_3D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
         plt.tight_layout()
 
         ax.dist = 5
-        ax.azim = 45
-        ax.elev = 30
+        ax.azim = 80
+        ax.elev = 15
 
         ax.set_zlim(0, max(abs(E) ** 2))
+
+        plt.tight_layout(pad=.01)
 
         if save:
             if folder:
@@ -111,13 +113,13 @@ def get_3D_graph(E: ndarray, show: bool = True, save: bool = False, folder: str 
 
     X, Z = meshgrid(ax_x, ax_z)
     fig, ax = plt.subplots(num='Ветровая рефракция пучка от z', figsize=(8, 8), subplot_kw={"projection": "3d"})
-    ax.set_title(f'y = {ax_y[ax_y.size // 2]:.0f} м')
-    ax.plot_surface(X, Z, abs(E[:, ax_x.size // 2, :]) ** 2, cmap='viridis', linewidth=0)
+    # ax.set_title(f'y = {ax_y[ax_y.size // 2]:.0f} м')
+    ax.plot_surface(X, Z, abs(E[:, ax_x.size // 2, :]) ** 2, cmap='inferno', linewidth=0)
 
     plt.tight_layout()
     ax.dist = 5
     ax.azim = 45
-    ax.elev = 30
+    ax.elev = 15
 
     ax.set_xlabel('X, м')
     ax.set_ylabel('Z, м')
